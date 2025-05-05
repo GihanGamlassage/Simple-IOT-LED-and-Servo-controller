@@ -1,0 +1,58 @@
+#include <WiFi.h>  // Use this instead of <ESP8266WiFi.h>
+#include <Servo.h>
+#include "Adafruit_MQTT.h"
+#include "Adafruit_MQTT_Client.h"
+
+// WiFi credentials
+#define WLAN_SSID       "Enter SSid"
+#define WLAN_PASS       "passowrd"
+
+// Adafruit IO credentials
+#define AIO_SERVER      "io.adafruit.com"
+#define AIO_SERVERPORT  1883
+#define AIO_USERNAME    "adafruit Username"
+#define AIO_KEY         "adafruit Key"
+
+// Pin definitions (use GPIO numbers directly for ESP32)
+#define LED_PIN 2         // GPIO2 is often used for onboard LED
+#define SERVO_PIN 4       // GPIO4 is a safe choice for servo control
+
+// WiFi and MQTT clients
+WiFiClient client;
+Adafruit_MQTT_Client mqtt(&client, AIO_SERVER, AIO_SERVERPORT, AIO_USERNAME, AIO_KEY);
+
+// Feeds
+Adafruit_MQTT_Subscribe ledControl = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME "/feeds/led");
+Adafruit_MQTT_Subscribe servoControl = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME "/feeds/servo");
+
+// Servo object
+Servo myServo;
+
+void setup() {
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, LOW);
+
+  Serial.begin(115200);
+  delay(10);
+
+  // Attach the servo
+  myServo.attach(SERVO_PIN);
+
+  // Connect to WiFi
+  Serial.println("\nConnecting to WiFi...");
+  WiFi.begin(WLAN_SSID, WLAN_PASS);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nWiFi connected");
+
+  // MQTT subscriptions
+  mqtt.subscribe(&ledControl);
+  mqtt.subscribe(&servoControl);
+}
+
+void loop() {
+  MQTT_connect();
+
+  Adafruit_MQTT_Subscribe
