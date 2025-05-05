@@ -1,0 +1,99 @@
+#include <ESP8266WiFi.h>
+#include <Servo.h>
+#include "Adafruit_MQTT.h"
+#include "Adafruit_MQTT_Client.h"
+
+// WiFi credentials
+#define WLAN_SSID       "Enter SSid"
+#define WLAN_PASS       "passowrd"
+
+// Adafruit IO credentials
+#define AIO_SERVER      "io.adafruit.com"
+#define AIO_SERVERPORT  1883
+#define AIO_USERNAME    "adafruit Username"
+#define AIO_KEY         "adafruit Key"
+
+// Pin definitions
+#define LED_PIN D4
+#define SERVO_PIN D2
+
+// WiFi and MQTT clients
+WiFiClient client;
+Adafruit_MQTT_Client mqtt(&client, AIO_SERVER, AIO_SERVERPORT, AIO_USERNAME, AIO_KEY);
+
+// Feeds
+Adafruit_MQTT_Subscribe ledControl = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME "/feeds/led");
+Adafruit_MQTT_Subscribe servoControl = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME "/feeds/servo");
+
+// Servo object
+Servo myServo;
+
+void setup() {
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, LOW);
+
+  Serial.begin(115200);
+  delay(10);
+
+  // Attach the servo
+  myServo.attach(SERVO_PIN);
+
+  // Connect to WiFi
+  Serial.println("\nConnecting to WiFi...");
+  WiFi.begin(WLAN_SSID, WLAN_PASS);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nWiFi connected");
+
+  // MQTT subscriptions
+  mqtt.subscribe(&ledControl);
+  mqtt.subscribe(&servoControl);
+}
+
+void loop() {
+  MQTT_connect();
+
+  Adafruit_MQTT_Subscribe *subscription;
+  while ((subscription = mqtt.readSubscription(1000))) {
+
+    // Handle LED control
+    if (subscription == &ledControl) {
+      String value = (char *)ledControl.lastread;
+      Serial.print("LED Received: "); Serial.println(value);
+      
+      if (value == "0") {
+        digitalWrite(LED_PIN, HIGH);
+      } else {
+        digitalWrite(LED_PIN, LOW);
+      }
+    }
+
+    // Handle Servo control
+    if (subscription == &servoControl) {
+      String value = (char *)servoControl.lastread;
+      Serial.print("Servo Received: "); Serial.println(value);
+      
+      int angle = value.toInt();  // Convert to integer angle
+      angle = constrain(angle, 0, 180);  // Ensure within bounds
+      myServo.write(angle);
+    }
+  }
+}
+
+// MQTT reconnect
+void MQTT_connect() {
+  int8_t ret;
+
+  if (mqtt.connected()) return;
+
+  Serial.print("Connecting to MQTT... ");
+  while ((ret = mqtt.connect()) != 0) {
+    Serial.println(mqtt.connectErrorString(ret));
+    Serial.println("Retrying in 5 seconds...");
+    mqtt.disconnect();
+    delay(5000);
+  }
+  Serial.println("MQTT Connected!");
+}
